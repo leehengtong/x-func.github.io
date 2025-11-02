@@ -1,6 +1,14 @@
 import Link from 'next/link'
 import Footer from '@/components/Footer'
 
+// Utility function to convert title to slug
+function titleToSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+}
+
 export default function ProductPage() {
   const products = [
     {
@@ -74,9 +82,10 @@ export default function ProductPage() {
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
             {products.map((product, index) => (
-              <div
+              <Link
                 key={index}
-                className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-shadow duration-300"
+                href={`/product/${titleToSlug(product.title)}`}
+                className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-shadow duration-300 cursor-pointer"
               >
                 <div className="p-8">
                   <div className="flex items-start mb-6">
@@ -102,7 +111,7 @@ export default function ProductPage() {
                     </ul>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
