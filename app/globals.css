@@ -30,3 +30,105 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Custom tooltip styles for better visibility */
+.tooltip-wrapper {
+  position: relative;
+}
+
+.tooltip-wrapper:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background-color: rgba(0, 0, 0, 0.9);
+  color: white;
+  font-size: 12px;
+  white-space: nowrap;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 1;
+  animation: tooltipFadeIn 0.2s ease-out;
+}
+
+.tooltip-wrapper:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 2px;
+  border: 5px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 1;
+  animation: tooltipFadeIn 0.2s ease-out;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes tooltipFadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
+/* For top toolbar - tooltips appear below */
+.tooltip-wrapper-top:hover::after {
+  top: 100%;
+  bottom: auto;
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.tooltip-wrapper-top:hover::before {
+  top: 100%;
+  bottom: auto;
+  margin-top: 2px;
+  margin-bottom: 0;
+  border-top-color: transparent;
+  border-bottom-color: rgba(0, 0, 0, 0.9);
+}
+
+/* For left toolbar - tooltips appear to the right */
+.tooltip-wrapper:not(.tooltip-wrapper-top):hover::after {
+  left: 100%;
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+  margin-left: 8px;
+  margin-bottom: 0;
+  animation: tooltipFadeInLeft 0.2s ease-out;
+}
+
+.tooltip-wrapper:not(.tooltip-wrapper-top):hover::before {
+  left: 100%;
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+  margin-left: 2px;
+  margin-bottom: 0;
+  border-top-color: transparent;
+  border-left-color: rgba(0, 0, 0, 0.9);
+  border-right-color: transparent;
+  animation: tooltipFadeInLeft 0.2s ease-out;
+}
+
