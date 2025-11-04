@@ -28,7 +28,8 @@ export default function ImageEditor() {
   const [resizeWidth, setResizeWidth] = useState<string>('')
   const [resizeHeight, setResizeHeight] = useState<string>('')
   const [outputFormat, setOutputFormat] = useState<string>('png')
-  const [compressionQuality, setCompressionQuality] = useState<number>(80)
+  const [selectedFormat, setSelectedFormat] = useState<string>('png')
+  const [compressionQuality, setCompressionQuality] = useState<number>(100)
   const [zoom, setZoom] = useState<number>(100)
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
@@ -37,6 +38,7 @@ export default function ImageEditor() {
   const [history, setHistory] = useState<HistoryState[]>([])
   const [historyIndex, setHistoryIndex] = useState<number>(-1)
   const [showProperties, setShowProperties] = useState(true)
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null)
   
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imageRef = useRef<HTMLImageElement>(null)
@@ -98,6 +100,16 @@ export default function ImageEditor() {
     }
   }
 
+  // Update image dimensions state
+  const updateImageDimensions = useCallback(() => {
+    if (imageRef.current && imageRef.current.naturalWidth && imageRef.current.naturalHeight) {
+      setImageDimensions({
+        width: imageRef.current.naturalWidth,
+        height: imageRef.current.naturalHeight
+      })
+    }
+  }, [])
+
   const canUndo = historyIndex > 0
   const canRedo = historyIndex < history.length - 1
 
@@ -107,11 +119,12 @@ export default function ImageEditor() {
       const newIndex = prevIndex - 1
       setHistory((h) => {
         setImageSrc(h[newIndex].imageSrc)
+        setTimeout(() => updateImageDimensions(), 0)
         return h
       })
       return newIndex
     })
-  }, [])
+  }, [updateImageDimensions])
 
   const handleRedo = useCallback(() => {
     setHistoryIndex((prevIndex) => {
@@ -119,11 +132,12 @@ export default function ImageEditor() {
         if (prevIndex >= h.length - 1) return h
         const newIndex = prevIndex + 1
         setImageSrc(h[newIndex].imageSrc)
+        setTimeout(() => updateImageDimensions(), 0)
         return h
       })
       return prevIndex
     })
-  }, [])
+  }, [updateImageDimensions])
 
   // Load image from file
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -136,6 +150,8 @@ export default function ImageEditor() {
         setHistory([{ imageSrc: newSrc, timestamp: Date.now() }])
         setHistoryIndex(0)
         resetView()
+        // Update dimensions after upload
+        setTimeout(() => updateImageDimensions(), 0)
       }
       reader.readAsDataURL(file)
     }
@@ -221,6 +237,26 @@ export default function ImageEditor() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleUndo, handleRedo, handleDownload])
 
+  // Update dimensions when image source changes
+  useEffect(() => {
+    if (imageSrc && imageRef.current) {
+      // If image is already loaded, update immediately
+      if (imageRef.current.complete && imageRef.current.naturalWidth) {
+        updateImageDimensions()
+      } else {
+        // Otherwise wait for load event
+        const handleLoad = () => updateImageDimensions()
+        const currentImageRef = imageRef.current
+        currentImageRef.addEventListener('load', handleLoad)
+        return () => {
+          if (currentImageRef) {
+            currentImageRef.removeEventListener('load', handleLoad)
+          }
+        }
+      }
+    }
+  }, [imageSrc, updateImageDimensions])
+
   // Draw image on canvas
   const drawImage = () => {
     if (!imageRef.current || !canvasRef.current) return
@@ -238,6 +274,9 @@ export default function ImageEditor() {
     canvas.width = displayedWidth
     canvas.height = displayedHeight
     ctx.drawImage(img, 0, 0, displayedWidth, displayedHeight)
+    
+    // Update dimensions after image loads
+    updateImageDimensions()
   }
 
   // Get canvas coordinates from mouse event
@@ -325,10 +364,11 @@ export default function ImageEditor() {
     const newSrc = canvas.toDataURL()
     setImageSrc(newSrc)
     addToHistory(newSrc)
-    setCropMode(false)
     setIsCropping(false)
     setCropArea(null)
     setStartPos(null)
+    // Update dimensions after crop
+    setTimeout(() => updateImageDimensions(), 0)
   }
 
   // Resize image
@@ -362,8 +402,10 @@ export default function ImageEditor() {
     const newSrc = canvas.toDataURL()
     setImageSrc(newSrc)
     addToHistory(newSrc)
-    setResizeWidth('')
-    setResizeHeight('')
+    setResizeWidth(width.toString())
+    setResizeHeight(height.toString())
+    // Update dimensions after resize
+    setImageDimensions({ width, height })
   }
 
   // Convert format and compress using FFmpeg
@@ -416,8 +458,6 @@ export default function ImageEditor() {
         inputFormat = 'bmp'
       } else if (blob.type.includes('gif')) {
         inputFormat = 'gif'
-      } else if (blob.type.includes('tiff') || blob.type.includes('tif')) {
-        inputFormat = 'tiff'
       }
       
       const inputFile = `input.${inputFormat}`
@@ -427,32 +467,29 @@ export default function ImageEditor() {
       const args: string[] = ['-i', inputFile]
       
       // Determine quality based on format
-      if (outputFormat === 'jpg' || outputFormat === 'jpeg') {
+      if (selectedFormat === 'jpg' || selectedFormat === 'jpeg') {
         // FFmpeg quality for JPEG: 2-31, where 2 is best quality
         // Convert 1-100 to 31-2 (inverse scale)
         const qv = Math.max(2, Math.min(31, Math.round(31 - (compressionQuality * 29 / 100))))
         args.push('-q:v', qv.toString())
-      } else if (outputFormat === 'png') {
+      } else if (selectedFormat === 'png') {
         // PNG compression: 0-9, where 9 is best compression
         const compressionLevel = Math.max(0, Math.min(9, Math.round((100 - compressionQuality) / 11)))
         args.push('-compression_level', compressionLevel.toString())
-      } else if (outputFormat === 'webp') {
+      } else if (selectedFormat === 'webp') {
         // WebP quality: 0-100
         args.push('-quality', compressionQuality.toString())
-      } else if (outputFormat === 'bmp') {
+      } else if (selectedFormat === 'bmp') {
         // BMP is lossless, no quality setting needed
         // But we can specify pixel format for optimization
         args.push('-pix_fmt', 'bgr24')
-      } else if (outputFormat === 'gif') {
+      } else if (selectedFormat === 'gif') {
         // GIF is lossless, no quality setting needed
         // Note: For animated GIFs, would need palettegen filter, but for static conversion this works
-      } else if (outputFormat === 'tiff' || outputFormat === 'tif') {
-        // TIFF compression: can use LZW, ZIP, or JPEG compression
-        args.push('-compression_algo', 'lzw')
       }
 
       // Convert and compress
-      const outputFile = `output.${outputFormat}`
+      const outputFile = `output.${selectedFormat}`
       args.push(outputFile)
       
       await ffmpeg.exec(args)
@@ -460,11 +497,9 @@ export default function ImageEditor() {
       // Read output file
       const data = await ffmpeg.readFile(outputFile)
       // Determine MIME type for blob
-      let mimeType = `image/${outputFormat}`
-      if (outputFormat === 'jpg' || outputFormat === 'jpeg') {
+      let mimeType = `image/${selectedFormat}`
+      if (selectedFormat === 'jpg' || selectedFormat === 'jpeg') {
         mimeType = 'image/jpeg'
-      } else if (outputFormat === 'tiff' || outputFormat === 'tif') {
-        mimeType = 'image/tiff'
       }
       // Convert FileData to Blob-compatible format
       // FFmpeg returns Uint8Array, ensure we have a proper ArrayBuffer
@@ -478,7 +513,10 @@ export default function ImageEditor() {
       reader.onload = (e) => {
         const newSrc = e.target?.result as string
         setImageSrc(newSrc)
+        setOutputFormat(selectedFormat) // Update output format after successful conversion
         addToHistory(newSrc)
+        // Update dimensions after conversion
+        setTimeout(() => updateImageDimensions(), 0)
       }
       reader.readAsDataURL(outputBlob)
 
@@ -511,21 +549,24 @@ export default function ImageEditor() {
     
     // Canvas only supports PNG, JPEG, and WebP
     // For other formats, convert to PNG or JPEG as fallback
-    if (outputFormat === 'jpg' || outputFormat === 'jpeg') {
+    if (selectedFormat === 'jpg' || selectedFormat === 'jpeg') {
       mimeType = 'image/jpeg'
-    } else if (outputFormat === 'webp') {
+    } else if (selectedFormat === 'webp') {
       mimeType = 'image/webp'
-    } else if (outputFormat === 'bmp' || outputFormat === 'gif' || outputFormat === 'tiff' || outputFormat === 'tif') {
+    } else if (selectedFormat === 'bmp' || selectedFormat === 'gif') {
       // Browser canvas doesn't support these formats directly
       // Fall back to PNG for lossless conversion
       mimeType = 'image/png'
-      console.warn(`Browser canvas doesn't support ${outputFormat.toUpperCase()} format. Using PNG as fallback. For ${outputFormat.toUpperCase()} conversion, please ensure FFmpeg is loaded.`)
+      console.warn(`Browser canvas doesn't support ${selectedFormat.toUpperCase()} format. Using PNG as fallback. For ${selectedFormat.toUpperCase()} conversion, please ensure FFmpeg is loaded.`)
     }
 
     ctx.drawImage(imageRef.current, 0, 0)
     const dataUrl = canvas.toDataURL(mimeType, quality)
     setImageSrc(dataUrl)
+    setOutputFormat(selectedFormat) // Update output format after successful conversion
     addToHistory(dataUrl)
+    // Update dimensions after compression
+    setTimeout(() => updateImageDimensions(), 0)
   }
 
   // Handle zoom
@@ -811,30 +852,6 @@ export default function ImageEditor() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
           </button>
-          <div className="mt-auto flex flex-col gap-1">
-            <button
-              onClick={handleUndo}
-              disabled={!canUndo}
-              className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg transition-all flex items-center justify-center text-gray-300 hover:bg-gray-700 hover:text-white active:bg-gray-600 disabled:opacity-30 disabled:hover:bg-gray-800 disabled:hover:text-gray-300 touch-manipulation tooltip-wrapper"
-              data-tooltip="Undo (Ctrl+Z)"
-              title="Undo (Ctrl+Z)"
-            >
-              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-              </svg>
-            </button>
-            <button
-              onClick={handleRedo}
-              disabled={!canRedo}
-              className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg transition-all flex items-center justify-center text-gray-300 hover:bg-gray-700 hover:text-white active:bg-gray-600 disabled:opacity-30 disabled:hover:bg-gray-800 disabled:hover:text-gray-300 touch-manipulation tooltip-wrapper"
-              data-tooltip="Redo (Ctrl+Shift+Z)"
-              title="Redo (Ctrl+Shift+Z)"
-            >
-              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6-6m6 6l-6 6" />
-              </svg>
-            </button>
-          </div>
         </div>
 
         {/* Central Canvas Area - Largest part */}
@@ -843,10 +860,10 @@ export default function ImageEditor() {
           {imageSrc && (
             <div className="bg-gray-800 border-b border-gray-700 px-4 py-1.5 flex items-center justify-between text-xs text-gray-400">
               <div className="flex items-center gap-2 sm:gap-4">
-                {imageRef.current && (
+                {imageDimensions && (
                   <span className="font-mono text-xs sm:text-sm">
-                    <span className="hidden sm:inline">{imageRef.current.naturalWidth} × {imageRef.current.naturalHeight}px</span>
-                    <span className="sm:hidden">{imageRef.current.naturalWidth}×{imageRef.current.naturalHeight}</span>
+                    <span className="hidden sm:inline">{imageDimensions.width} × {imageDimensions.height}px</span>
+                    <span className="sm:hidden">{imageDimensions.width}×{imageDimensions.height}</span>
                   </span>
                 )}
                 <span className="text-gray-500 hidden sm:inline">|</span>
@@ -1009,8 +1026,8 @@ export default function ImageEditor() {
                   <div className="space-y-3">
                     <label className="text-sm text-gray-400 mb-1 block">File Format</label>
                     <select
-                      value={outputFormat}
-                      onChange={(e) => setOutputFormat(e.target.value)}
+                      value={selectedFormat}
+                      onChange={(e) => setSelectedFormat(e.target.value)}
                       className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-white"
                     >
                       <option value="png">PNG - Portable Network Graphics</option>
@@ -1019,9 +1036,9 @@ export default function ImageEditor() {
                       <option value="webp">WebP - Modern Web Format</option>
                       <option value="bmp">BMP - Bitmap Image</option>
                       <option value="gif">GIF - Graphics Interchange Format</option>
-                      <option value="tiff">TIFF - Tagged Image File Format</option>
                     </select>
                     <button
+                      type="button"
                       onClick={handleConvertAndCompress}
                       disabled={loading}
                       className="w-full bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1057,6 +1074,7 @@ export default function ImageEditor() {
                       />
                     </div>
                     <button
+                      type="button"
                       onClick={handleConvertAndCompress}
                       disabled={loading}
                       className="w-full bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
