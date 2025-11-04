@@ -4,14 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import Logo from './Logo'
-
-// Utility function to convert title to slug
-function titleToSlug(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
-}
+import { getProducts, titleToSlug } from '@/lib/products'
 
 const navItems = [
   { name: 'Mission', href: '/mission' },
@@ -20,12 +13,8 @@ const navItems = [
   { name: 'Contact', href: '/contact' },
 ]
 
-const products = [
-  { title: 'AI Image Editor' },
-  { title: 'AI Language Learning' },
-  { title: 'Stock Market Analysis' },
-  { title: 'News Aggregation' },
-]
+// Get products for navbar (only need titles)
+const products = getProducts().map(product => ({ title: product.title }))
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)

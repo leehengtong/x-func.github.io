@@ -1,69 +1,9 @@
 import Link from 'next/link'
 import Footer from '@/components/Footer'
 import ImageEditor from '@/components/ImageEditor'
+import GifEditor from '@/components/GifEditor'
 import { notFound } from 'next/navigation'
-
-// Utility function to convert title to slug
-function titleToSlug(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
-}
-
-// Get all products (shared function)
-function getProducts() {
-  return [
-    {
-      title: 'AI Image Editor',
-      description: 'Transform and enhance your images with cutting-edge AI technology. Remove backgrounds, adjust colors, apply artistic styles, and more with just a few clicks.',
-      icon: '🎨',
-      features: [
-        'Background removal',
-        'Style transfer',
-        'Color correction',
-        'Object removal',
-        'Enhancement tools'
-      ]
-    },
-    {
-      title: 'AI Language Learning',
-      description: 'Master new languages faster with personalized AI tutoring. Interactive lessons, pronunciation practice, and adaptive learning paths tailored to your needs.',
-      icon: '🌐',
-      features: [
-        'Personalized curriculum',
-        'Voice recognition',
-        'Real-time feedback',
-        'Grammar analysis',
-        'Cultural context'
-      ]
-    },
-    {
-      title: 'Stock Market Analysis',
-      description: 'Make informed investment decisions with AI-powered market analysis. Identify trends, predict movements, and get actionable insights from vast amounts of market data.',
-      icon: '📈',
-      features: [
-        'Trend identification',
-        'Risk assessment',
-        'Portfolio optimization',
-        'Market predictions',
-        'Real-time alerts'
-      ]
-    },
-    {
-      title: 'News Aggregation',
-      description: 'Stay informed with AI-curated news. Get the most relevant and useful information from multiple sources, filtered and summarized for your interests.',
-      icon: '📰',
-      features: [
-        'Multi-source aggregation',
-        'Relevance scoring',
-        'Bias detection',
-        'Summary generation',
-        'Personalized feed'
-      ]
-    },
-  ]
-}
+import { getProducts, titleToSlug } from '@/lib/products'
 
 // Generate static params for static export
 export async function generateStaticParams() {
@@ -87,16 +27,22 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
     notFound()
   }
 
-  const isImageEditor = params.slug === 'ai-image-editor'
+  const isImageEditor = params.slug === 'image-editor'
+  const isGifEditor = params.slug === 'gif-editor'
 
   return (
-    <main className={`${isImageEditor ? 'h-screen pt-16 flex flex-col' : 'min-h-screen pt-16'}`}>
+    <main className={`${isImageEditor || isGifEditor ? 'h-screen pt-16 flex flex-col' : 'min-h-screen pt-16'}`}>
       {/* Product Details Section */}
-      <section className={`${isImageEditor ? 'flex-1 overflow-auto pb-4 sm:pb-6 lg:pb-8' : 'py-20'} px-4 sm:px-6 lg:px-8 bg-gray-50`}>
+      <section className={`${isImageEditor || isGifEditor ? 'flex-1 overflow-auto pb-4 sm:pb-6 lg:pb-8' : 'py-20'} px-4 sm:px-6 lg:px-8 bg-gray-50`}>
         {isImageEditor ? (
           /* Image Editor Component - Full Width and Height */
           <div className="w-full h-full min-h-0">
             <ImageEditor />
+          </div>
+        ) : isGifEditor ? (
+          /* GIF Editor Component - Full Width and Height */
+          <div className="w-full h-full min-h-0">
+            <GifEditor />
           </div>
         ) : (
           <div className="max-w-4xl mx-auto">
@@ -133,7 +79,7 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
         )}
       </section>
 
-      {!isImageEditor && <Footer />}
+      {!isImageEditor && !isGifEditor && <Footer />}
     </main>
   )
 }

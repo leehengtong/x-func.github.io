@@ -1,65 +1,9 @@
 import Link from 'next/link'
 import Footer from '@/components/Footer'
-
-// Utility function to convert title to slug
-function titleToSlug(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
-}
+import { getProducts, titleToSlug } from '@/lib/products'
 
 export default function ProductPage() {
-  const products = [
-    {
-      title: 'AI Image Editor',
-      description: 'Transform and enhance your images with cutting-edge AI technology. Remove backgrounds, adjust colors, apply artistic styles, and more with just a few clicks.',
-      icon: '🎨',
-      features: [
-        'Background removal',
-        'Style transfer',
-        'Color correction',
-        'Object removal',
-        'Enhancement tools'
-      ]
-    },
-    {
-      title: 'AI Language Learning',
-      description: 'Master new languages faster with personalized AI tutoring. Interactive lessons, pronunciation practice, and adaptive learning paths tailored to your needs.',
-      icon: '🌐',
-      features: [
-        'Personalized curriculum',
-        'Voice recognition',
-        'Real-time feedback',
-        'Grammar analysis',
-        'Cultural context'
-      ]
-    },
-    {
-      title: 'Stock Market Analysis',
-      description: 'Make informed investment decisions with AI-powered market analysis. Identify trends, predict movements, and get actionable insights from vast amounts of market data.',
-      icon: '📈',
-      features: [
-        'Trend identification',
-        'Risk assessment',
-        'Portfolio optimization',
-        'Market predictions',
-        'Real-time alerts'
-      ]
-    },
-    {
-      title: 'News Aggregation',
-      description: 'Stay informed with AI-curated news. Get the most relevant and useful information from multiple sources, filtered and summarized for your interests.',
-      icon: '📰',
-      features: [
-        'Multi-source aggregation',
-        'Relevance scoring',
-        'Bias detection',
-        'Summary generation',
-        'Personalized feed'
-      ]
-    },
-  ]
+  const products = getProducts()
 
   return (
     <main className="min-h-screen pt-16">

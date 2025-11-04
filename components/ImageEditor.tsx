@@ -38,20 +38,11 @@ export default function ImageEditor() {
   const [historyIndex, setHistoryIndex] = useState<number>(-1)
   const [showProperties, setShowProperties] = useState(true)
   
-  // GIF-specific state
-  const [isGif, setIsGif] = useState(false)
-  const [gifFrames, setGifFrames] = useState<string[]>([])
-  const [currentFrame, setCurrentFrame] = useState<number>(0)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [viewMode, setViewMode] = useState<'animated' | 'frame'>('animated')
-  
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imageRef = useRef<HTMLImageElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const ffmpegRef = useRef<FFmpeg | null>(null)
   const canvasContainerRef = useRef<HTMLDivElement>(null)
-  const animationIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const gifImageRef = useRef<HTMLImageElement>(null)
   const ffmpegLoadPromiseRef = useRef<Promise<boolean> | null>(null)
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false)
 
@@ -134,132 +125,19 @@ export default function ImageEditor() {
     })
   }, [])
 
-  // Extract frames from GIF using FFmpeg
-  const extractGifFrames = async (file: File) => {
-    // Wait for FFmpeg to be loaded if it's still loading
-    if (!ffmpegLoaded && ffmpegLoadPromiseRef.current) {
-      try {
-        await ffmpegLoadPromiseRef.current
-        // Update state after promise resolves
-        if (ffmpegRef.current?.loaded) {
-          setFfmpegLoaded(true)
-        }
-      } catch (error) {
-        console.warn('FFmpeg failed to load, skipping frame extraction:', error)
-        setGifFrames([])
-        return
-      }
-    }
-
-    // Verify FFmpeg instance exists and is actually loaded
-    const ffmpeg = ffmpegRef.current
-    if (!ffmpeg || !ffmpeg.loaded || !ffmpegLoaded) {
-      console.warn('FFmpeg not loaded yet')
-      setGifFrames([])
-      return
-    }
-
-    setLoading(true)
-    try {
-      const arrayBuffer = await file.arrayBuffer()
-      const inputFile = 'input.gif'
-      
-      await ffmpeg.writeFile(inputFile, new Uint8Array(arrayBuffer))
-      
-      // Extract all frames as PNG images
-      const extractArgs = ['-i', inputFile, '-vsync', '0', 'frame_%03d.png']
-      
-      await ffmpeg.exec(extractArgs)
-      
-      // Try to read frames (up to 100 frames to avoid performance issues)
-      const frames: string[] = []
-      
-      let frameIndex = 0
-      while (frameIndex < 100) {
-        try {
-          const frameFile = `frame_${String(frameIndex + 1).padStart(3, '0')}.png`
-          const data = await ffmpeg.readFile(frameFile)
-          
-          const blob = new Blob([data], { type: 'image/png' })
-          const frameUrl = URL.createObjectURL(blob)
-          frames.push(frameUrl)
-          
-          await ffmpeg.deleteFile(frameFile).catch(() => {})
-          frameIndex++
-        } catch {
-          // No more frames
-          break
-        }
-      }
-      
-      setGifFrames(frames)
-      setCurrentFrame(0)
-      
-      // Cleanup
-      await ffmpeg.deleteFile(inputFile).catch(() => {})
-      
-      // Note: isGif is already set to true when file is loaded
-      // Frame extraction is optional - GIF will work even without extracted frames
-    } catch (error) {
-      console.error('Error extracting GIF frames:', error)
-      // Don't set isGif to false - the GIF can still be displayed animated
-      // Just clear the frames array
-      setGifFrames([])
-    } finally {
-      setLoading(false)
-    }
-  }
-
   // Load image from file
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file && file.type.startsWith('image/')) {
-      // Reset GIF state
-      setIsGif(false)
-      setGifFrames([])
-      setCurrentFrame(0)
-      setIsPlaying(false)
-      setViewMode('animated')
-      
-      // Stop any running animation
-      if (animationIntervalRef.current) {
-        clearInterval(animationIntervalRef.current)
-        animationIntervalRef.current = null
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const newSrc = e.target?.result as string
+        setImageSrc(newSrc)
+        setHistory([{ imageSrc: newSrc, timestamp: Date.now() }])
+        setHistoryIndex(0)
+        resetView()
       }
-      
-      // Check if it's a GIF
-      if (file.type === 'image/gif') {
-        // Set GIF state immediately so UI controls appear
-        setIsGif(true)
-        setViewMode('animated')
-        setIsPlaying(true)
-        
-        const reader = new FileReader()
-        reader.onload = async (e) => {
-          const newSrc = e.target?.result as string
-          setImageSrc(newSrc)
-          setHistory([{ imageSrc: newSrc, timestamp: Date.now() }])
-          setHistoryIndex(0)
-          resetView()
-          
-          // Extract frames in background (non-blocking)
-          extractGifFrames(file).catch((error) => {
-            console.warn('Frame extraction failed, but GIF will still display:', error)
-            // Keep isGif true so controls still work for animated view
-          })
-        }
-        reader.readAsDataURL(file)
-      } else {
-        const reader = new FileReader()
-        reader.onload = (e) => {
-          const newSrc = e.target?.result as string
-          setImageSrc(newSrc)
-          setHistory([{ imageSrc: newSrc, timestamp: Date.now() }])
-          setHistoryIndex(0)
-          resetView()
-        }
-        reader.readAsDataURL(file)
-      }
+      reader.readAsDataURL(file)
     }
   }
 
@@ -588,7 +466,12 @@ export default function ImageEditor() {
       } else if (outputFormat === 'tiff' || outputFormat === 'tif') {
         mimeType = 'image/tiff'
       }
-      const outputBlob = new Blob([data], { type: mimeType })
+      // Convert FileData to Blob-compatible format
+      // FFmpeg returns Uint8Array, ensure we have a proper ArrayBuffer
+      const blobBuffer = data instanceof Uint8Array && data.buffer instanceof ArrayBuffer
+        ? data.buffer.slice(0)
+        : new Uint8Array(data as unknown as ArrayLike<number>).buffer
+      const outputBlob = new Blob([blobBuffer], { type: mimeType })
       
       // Update image display
       const reader = new FileReader()
@@ -678,108 +561,6 @@ export default function ImageEditor() {
     setPanOffset({ x: 0, y: 0 })
   }
 
-  // GIF animation controls
-  const handlePlayPause = () => {
-    if (isPlaying) {
-      // Currently playing - pause by showing a static frame
-      if (gifFrames.length > 0) {
-        // Show current frame (or first frame if at start)
-        setViewMode('frame')
-        setIsPlaying(false)
-      } else {
-        // No frames extracted yet - can't pause, but we can stop the animation
-        // by temporarily removing the src (but this is a hack)
-        // Better: show message that frame extraction is needed
-        console.warn('Cannot pause: frames not extracted yet')
-      }
-    } else {
-      // Currently paused - play by showing animated GIF
-      setViewMode('animated')
-      setIsPlaying(true)
-    }
-  }
-
-  const handleNextFrame = () => {
-    if (gifFrames.length > 0) {
-      setCurrentFrame((prev) => (prev + 1) % gifFrames.length)
-      setViewMode('frame')
-      setIsPlaying(false)
-    }
-  }
-
-  const handlePrevFrame = () => {
-    if (gifFrames.length > 0) {
-      setCurrentFrame((prev) => (prev - 1 + gifFrames.length) % gifFrames.length)
-      setViewMode('frame')
-      setIsPlaying(false)
-    }
-  }
-
-  const handleGoToFrame = (frameIndex: number) => {
-    if (frameIndex >= 0 && frameIndex < gifFrames.length && gifFrames.length > 0) {
-      setCurrentFrame(frameIndex)
-      setViewMode('frame')
-      setIsPlaying(false)
-    }
-  }
-
-  // Ensure frame mode is only active when frames are available
-  useEffect(() => {
-    if (isGif && viewMode === 'frame' && gifFrames.length === 0) {
-      // Auto-switch to animated mode if no frames available
-      setViewMode('animated')
-      setIsPlaying(true)
-    }
-  }, [isGif, viewMode, gifFrames.length])
-
-  // Ensure currentFrame is valid when frames change
-  useEffect(() => {
-    if (gifFrames.length > 0 && currentFrame >= gifFrames.length) {
-      setCurrentFrame(0)
-    }
-  }, [gifFrames.length, currentFrame])
-
-  // Handle GIF animation playback
-  // Note: Browser handles GIF animation automatically, this effect just manages state
-  useEffect(() => {
-    if (!isGif || viewMode !== 'animated') {
-      if (animationIntervalRef.current) {
-        clearInterval(animationIntervalRef.current)
-        animationIntervalRef.current = null
-      }
-      return
-    }
-
-    // Browser handles GIF animation natively - no need for interval
-    // Just ensure playing state is correct
-    if (viewMode === 'animated' && !isPlaying) {
-      // If user wants to play but isPlaying is false, we don't need to do anything
-      // The browser will animate the GIF automatically when src is set
-    }
-
-    return () => {
-      if (animationIntervalRef.current) {
-        clearInterval(animationIntervalRef.current)
-        animationIntervalRef.current = null
-      }
-    }
-  }, [isGif, isPlaying, viewMode])
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (animationIntervalRef.current) {
-        clearInterval(animationIntervalRef.current)
-      }
-    }
-  }, [])
-
-  // Cleanup frame URLs when component unmounts or frames change
-  useEffect(() => {
-    return () => {
-      gifFrames.forEach(url => URL.revokeObjectURL(url))
-    }
-  }, [gifFrames])
 
   // Fit image to screen
   const handleFitToScreen = () => {
@@ -1070,64 +851,8 @@ export default function ImageEditor() {
                 )}
                 <span className="text-gray-500 hidden sm:inline">|</span>
                 <span className="uppercase text-xs sm:text-sm">{outputFormat}</span>
-                {isGif && (
-                  <>
-                    <span className="text-gray-500 hidden sm:inline">|</span>
-                    <span className="text-xs sm:text-sm">
-                      {viewMode === 'frame' && gifFrames.length > 0 
-                        ? `Frame ${currentFrame + 1}/${gifFrames.length}` 
-                        : 'GIF Animation'}
-                    </span>
-                  </>
-                )}
               </div>
               <div className="flex items-center gap-2">
-                {isGif && (
-                  <div className="flex items-center gap-1 mr-2">
-                    <button
-                      onClick={handlePrevFrame}
-                      disabled={viewMode === 'animated' || gifFrames.length === 0}
-                      className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Previous Frame"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={handlePlayPause}
-                      disabled={isPlaying && viewMode === 'animated' && gifFrames.length === 0}
-                      className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={
-                        isPlaying && viewMode === 'animated' && gifFrames.length === 0
-                          ? 'Waiting for frame extraction'
-                          : isPlaying && viewMode === 'animated'
-                          ? 'Pause'
-                          : 'Play'
-                      }
-                    >
-                      {isPlaying && viewMode === 'animated' ? (
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                        </svg>
-                      ) : (
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
-                      )}
-                    </button>
-                    <button
-                      onClick={handleNextFrame}
-                      disabled={viewMode === 'animated' || gifFrames.length === 0}
-                      className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Next Frame"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </div>
-                )}
                 <button
                   onClick={() => setShowProperties(!showProperties)}
                   className="lg:hidden px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors"
@@ -1173,31 +898,19 @@ export default function ImageEditor() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   ref={imageRef}
-                  src={isGif && viewMode === 'frame' && gifFrames[currentFrame] ? gifFrames[currentFrame] : imageSrc}
+                  src={imageSrc || ''}
                   alt="Preview"
                   onLoad={drawImage}
                   className="hidden"
                 />
-                {/* Display image - animated GIF or frame */}
-                {isGif && viewMode === 'frame' && gifFrames.length > 0 && gifFrames[currentFrame] ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    ref={gifImageRef}
-                    src={gifFrames[currentFrame]}
-                    alt={`Frame ${currentFrame + 1} of ${gifFrames.length}`}
-                    className="max-w-full h-auto block shadow-2xl"
-                    draggable={false}
-                  />
-                ) : (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    ref={gifImageRef}
-                    src={imageSrc || ''}
-                    alt="Preview"
-                    className="max-w-full h-auto block shadow-2xl"
-                    draggable={false}
-                  />
-                )}
+                {/* Display image */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imageSrc || ''}
+                  alt="Preview"
+                  className="max-w-full h-auto block shadow-2xl"
+                  draggable={false}
+                />
                 <canvas
                   ref={canvasRef}
                   className="hidden"
@@ -1354,142 +1067,6 @@ export default function ImageEditor() {
                 </div>
               )}
 
-              {/* GIF Controls */}
-              {isGif && (
-                <div className="bg-gray-700 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    GIF Animation
-                  </h3>
-                  <div className="space-y-3">
-                    {loading && gifFrames.length === 0 && (
-                      <div className="text-sm text-gray-400 text-center py-2">
-                        Extracting frames...
-                      </div>
-                    )}
-                    
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handlePlayPause}
-                        disabled={isPlaying && viewMode === 'animated' && gifFrames.length === 0}
-                        className="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={isPlaying && viewMode === 'animated' && gifFrames.length === 0 ? 'Waiting for frame extraction to enable pause' : undefined}
-                      >
-                        {isPlaying && viewMode === 'animated' ? (
-                          <>
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                            </svg>
-                            Pause
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M8 5v14l11-7z" />
-                            </svg>
-                            Play Animation
-                          </>
-                        )}
-                      </button>
-                    </div>
-                    {isPlaying && viewMode === 'animated' && gifFrames.length === 0 && !loading && (
-                      <div className="text-xs text-gray-500 text-center">
-                        Extract frames to enable pause
-                      </div>
-                    )}
-                    
-                    {gifFrames.length > 0 && (
-                      <>
-                        <div className="border-t border-gray-600 pt-3">
-                          <label className="text-sm text-gray-400 mb-2 block">View Mode</label>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => {
-                                setViewMode('animated')
-                                setIsPlaying(true)
-                              }}
-                              className={`flex-1 px-3 py-2 rounded-lg font-medium transition-colors ${
-                                viewMode === 'animated'
-                                  ? 'bg-primary-600 text-white'
-                                  : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
-                              }`}
-                            >
-                              Animated
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (gifFrames.length > 0) {
-                                  setViewMode('frame')
-                                  setIsPlaying(false)
-                                }
-                              }}
-                              disabled={gifFrames.length === 0}
-                              className={`flex-1 px-3 py-2 rounded-lg font-medium transition-colors ${
-                                viewMode === 'frame'
-                                  ? 'bg-primary-600 text-white'
-                                  : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
-                              } disabled:opacity-50 disabled:cursor-not-allowed`}
-                            >
-                              Frame by Frame
-                            </button>
-                          </div>
-                        </div>
-
-                        {viewMode === 'frame' && (
-                          <div className="border-t border-gray-600 pt-3 space-y-3">
-                            <div>
-                              <div className="flex justify-between items-center mb-2">
-                                <label className="text-sm text-gray-400">Frame</label>
-                                <span className="text-sm font-medium text-white">
-                                  {currentFrame + 1} / {gifFrames.length}
-                                </span>
-                              </div>
-                              <input
-                                type="range"
-                                min="0"
-                                max={gifFrames.length - 1}
-                                value={currentFrame}
-                                onChange={(e) => handleGoToFrame(parseInt(e.target.value))}
-                                className="w-full accent-primary-500"
-                              />
-                            </div>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={handlePrevFrame}
-                                className="flex-1 bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                </svg>
-                                Previous
-                              </button>
-                              <button
-                                onClick={handleNextFrame}
-                                className="flex-1 bg-gray-600 hover:bg-gray-500 text-white px-3 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                              >
-                                Next
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                </svg>
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                    
-                    {!loading && gifFrames.length === 0 && (
-                      <div className="text-xs text-gray-500 text-center py-2 border-t border-gray-600 pt-3">
-                        Frame extraction unavailable. Animated view still works.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
               {/* Default/Select Tool View */}
               {activeTool === 'select' && (
                 <div className="bg-gray-700 rounded-lg p-4">
@@ -1506,12 +1083,6 @@ export default function ImageEditor() {
                         <span className="text-gray-400">Output Format:</span>
                         <span className="text-white uppercase">{outputFormat}</span>
                       </div>
-                      {isGif && gifFrames.length > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-400">Frames:</span>
-                          <span className="text-white font-mono">{gifFrames.length}</span>
-                        </div>
-                      )}
                       <div className="mt-4 pt-4 border-t border-gray-600">
                         <p className="text-gray-400 text-xs">
                           Use the tools in the toolbar above to edit your image. Click and drag to pan when using the select tool.
