@@ -100,6 +100,30 @@ export function getProducts(): Product[] {
         'Personalized feed'
       ]
     },
+    {
+      title: 'Log Viewer',
+      description: 'Analyze, search, and visualize logs effortlessly. Filter, highlight, and extract insights from log files to identify issues and trends quickly.',
+      icon: '📑',
+      features: [
+        'Log filtering & search',
+        'Error & warning highlighting',
+        'Timestamp navigation',
+        'Pattern recognition',
+        'Real-time log streaming'
+      ]
+    },
+    {
+      title: 'Text Extraction',
+      description: 'Extract key information, entities, or structured data from raw text, PDFs, or images using powerful AI-driven methods. Simplify data mining and processing.',
+      icon: '📝',
+      features: [
+        'OCR (image/PDF to text)',
+        'Named entity extraction',
+        'Pattern matching',
+        'Bulk processing',
+        'Export structured data'
+      ]
+    },
   ]
 }
 
