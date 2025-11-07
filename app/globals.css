@@ -132,3 +132,12 @@ html {
   animation: tooltipFadeInLeft 0.2s ease-out;
 }
 
+/* Hide scrollbars utility for product gallery */
+.scrollbar-hide {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Safari and Chrome */
+}
+

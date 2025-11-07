@@ -1,34 +1,10 @@
 import Link from 'next/link'
 import ProductCard from '@/components/ProductCard'
 import Logo from '@/components/Logo'
+import { getProducts, titleToSlug } from '@/lib/products'
 
 export default function Home() {
-  const products = [
-    {
-      title: 'AI Image Editor',
-      description: 'Edit images with advanced AI capabilities',
-      icon: '🎨',
-      href: '/product'
-    },
-    {
-      title: 'AI Language Learning',
-      description: 'Make language learning easy and accessible',
-      icon: '🌐',
-      href: '/product'
-    },
-    {
-      title: 'Stock Market Analysis',
-      description: 'Use AI to analyze stock markets and identify trending opportunities',
-      icon: '📈',
-      href: '/product'
-    },
-    {
-      title: 'News Aggregation',
-      description: 'Aggregate news content and highlight the most useful information',
-      icon: '📰',
-      href: '/product'
-    },
-  ]
+  const products = getProducts();
 
   return (
     <main className="min-h-screen">
@@ -134,24 +110,27 @@ export default function Home() {
               Explore our comprehensive suite of AI-powered tools
             </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {products.map((product, index) => (
-              <Link key={index} href={product.href}>
-                <ProductCard
-                  title={product.title}
-                  description={product.description}
-                  icon={product.icon}
-                />
-              </Link>
-            ))}
-          </div>
-          <div className="text-center">
-            <Link
-              href="/product"
-              className="inline-block bg-primary-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-primary-700 transition-colors duration-200"
+          <div className="relative">
+            {/* Scroll hints */}
+            <div className="pointer-events-none absolute left-0 top-0 h-full w-10 z-10 bg-gradient-to-r from-gray-50 to-transparent" />
+            <div className="pointer-events-none absolute right-0 top-0 h-full w-10 z-10 bg-gradient-to-l from-gray-50 to-transparent" />
+            {/* Scrollable row */}
+            <div
+              className="overflow-x-auto scrollbar-hide [-webkit-overflow-scrolling:_touch]"
+              aria-label="Product gallery, scroll horizontally to see more"
             >
-              View All Products
-            </Link>
+              <div className="flex gap-6 md:gap-8 lg:gap-10 w-max pb-4">
+                {products.map((product) => (
+                  <Link key={product.title} href={`/product/${titleToSlug(product.title)}`} className="flex-shrink-0 min-w-[280px] max-w-xs w-full">
+                    <ProductCard
+                      title={product.title}
+                      description={product.description}
+                      icon={product.icon}
+                    />
+                  </Link>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
