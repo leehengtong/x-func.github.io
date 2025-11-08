@@ -2,6 +2,7 @@ import Link from 'next/link'
 import Footer from '@/components/Footer'
 import ImageEditor from '@/components/ImageEditor'
 import GifEditor from '@/components/GifEditor'
+import LogViewer from '@/components/LogViewer'
 import { notFound } from 'next/navigation'
 import { getProducts, titleToSlug } from '@/lib/products'
 
@@ -29,11 +30,12 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
 
   const isImageEditor = params.slug === 'image-editor'
   const isGifEditor = params.slug === 'gif-editor'
+  const isLogViewer = params.slug === 'log-viewer'
 
   return (
-    <main className={`${isImageEditor || isGifEditor ? 'h-screen pt-16 flex flex-col' : 'min-h-screen pt-16'}`}>
+    <main className={`${isImageEditor || isGifEditor || isLogViewer ? 'h-screen pt-16 flex flex-col' : 'min-h-screen pt-16'}`}>
       {/* Product Details Section */}
-      <section className={`${isImageEditor || isGifEditor ? 'flex-1 overflow-auto pb-4 sm:pb-6 lg:pb-8' : 'py-20'} px-4 sm:px-6 lg:px-8 bg-gray-50`}>
+      <section className={`${isImageEditor || isGifEditor || isLogViewer ? 'flex-1 overflow-auto pb-4 sm:pb-6 lg:pb-8' : 'py-20'} px-4 sm:px-6 lg:px-8 bg-gray-50`}>
         {isImageEditor ? (
           /* Image Editor Component - Full Width and Height */
           <div className="w-full h-full min-h-0">
@@ -43,6 +45,11 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
           /* GIF Editor Component - Full Width and Height */
           <div className="w-full h-full min-h-0">
             <GifEditor />
+          </div>
+        ) : isLogViewer ? (
+          /* Log Viewer Component - Full Width and Height */
+          <div className="w-full h-full min-h-0">
+            <LogViewer />
           </div>
         ) : (
           <div className="max-w-4xl mx-auto">
@@ -79,7 +86,7 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
         )}
       </section>
 
-      {!isImageEditor && !isGifEditor && <Footer />}
+      {!isImageEditor && !isGifEditor && !isLogViewer && <Footer />}
     </main>
   )
 }
